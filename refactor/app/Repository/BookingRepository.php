@@ -89,7 +89,7 @@ class BookingRepository extends BaseRepository
      * @param $user_id
      * @return array
      */
-    public function getUsersJobsHistory($user_id, Request $request)
+    public function getUsersJobsHistory($user_id, Request $request) //I believe that in Repository methods, data should ideally be passed in a collection or an array rather than directly in the Request object.
     {
         $page = $request->get('page');
         if (isset($page)) {
@@ -130,7 +130,7 @@ class BookingRepository extends BaseRepository
 
         $immediatetime = 5;
         $consumer_type = $user->userMeta->consumer_type;
-        if ($user->user_type == env('CUSTOMER_ROLE_ID')) {
+        if ($user->user_type == env('CUSTOMER_ROLE_ID')) { //For Best practices: Environment variables shouldn't be directly accessed within business logic. They should first be defined and called from a config file. Later, we can utilize config() to retrieve the corresponding key-value pair, following the default behavior in Laravel.
             $cuser = $user;
 
             if (!isset($data['from_language_id'])) {
@@ -616,7 +616,7 @@ class BookingRepository extends BaseRepository
         $logger->pushHandler(new StreamHandler(storage_path('logs/push/laravel-' . date('Y-m-d') . '.log'), Logger::DEBUG));
         $logger->pushHandler(new FirePHPHandler());
         $logger->addInfo('Push send for job ' . $job_id, [$users, $data, $msg_text, $is_need_delay]);
-        if (env('APP_ENV') == 'prod') {
+        if (env('APP_ENV') == 'prod') { // we should use config "config('app.env')" instead of using direct environment variables
             $onesignalAppID = config('app.prodOnesignalAppID');
             $onesignalRestAuthKey = sprintf("Authorization: Basic %s", config('app.prodOnesignalApiKey'));
         } else {
@@ -655,6 +655,7 @@ class BookingRepository extends BaseRepository
             $next_business_time = DateTimeHelper::getNextBusinessTimeString();
             $fields['send_after'] = $next_business_time;
         }
+        // I believe we can create a service class for this purpose. It would enable us to reuse this particular curl call across different sections without duplicating the code.
         $fields = json_encode($fields);
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, "https://onesignal.com/api/v1/notifications");
@@ -742,9 +743,9 @@ class BookingRepository extends BaseRepository
     {
         $job = Job::find($id);
 
-        $current_translator = $job->translatorJobRel->where('cancel_at', Null)->first();
+        $current_translator = $job->translatorJobRel->whereNull('cancel_at')->first();
         if (is_null($current_translator))
-            $current_translator = $job->translatorJobRel->where('completed_at', '!=', Null)->first();
+            $current_translator = $job->translatorJobRel->whereNotNull('completed_at')->first();
 
         $log_data = [];
 
@@ -780,7 +781,7 @@ class BookingRepository extends BaseRepository
 
         $job->reference = $data['reference'];
 
-        if ($job->due <= Carbon::now()) {
+        if (Carbon::now()->lessThanOrEqualTo($job->due)) {
             $job->save();
             return ['Updated'];
         } else {
@@ -954,7 +955,6 @@ class BookingRepository extends BaseRepository
         $job->save();
         return true;
 //        }
-        return false;
     }
 
     /**
@@ -965,7 +965,6 @@ class BookingRepository extends BaseRepository
      */
     private function changePendingStatus($job, $data, $changedTranslator)
     {
-//        if (in_array($data['status'], ['withdrawnbefore24', 'withdrawafter24', 'timedout', 'assigned'])) {
         $job->status = $data['status'];
         if ($data['admin_comments'] == '' && $data['status'] == 'timedout') return false;
         $job->admin_comments = $data['admin_comments'];
@@ -1003,10 +1002,6 @@ class BookingRepository extends BaseRepository
             $job->save();
             return true;
         }
-
-
-//        }
-        return false;
     }
 
     /*
